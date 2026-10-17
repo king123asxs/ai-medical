@@ -1,26 +1,40 @@
-"""Chroma向量数据库封装"""
-import os
+﻿"""Milvus向量数据库封装"""
 from typing import List, Optional
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+from pymilvus import MilvusClient, DataType
 from core.config import settings
 from rag.embeddings import get_embeddings
 
 
 class VectorStore:
-    """Chroma向量存储管理器"""
+    """Milvus向量存储管理器"""
 
     def __init__(self):
-        os.makedirs(settings.chroma_persist_dir, exist_ok=True)
-        self.client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir,
-            settings=ChromaSettings(anonymized_telemetry=False),
+        self.client = MilvusClient(
+            uri=settings.milvus_uri,
+            token=settings.milvus_token or None,
         )
-        self.collection = self.client.get_or_create_collection(
-            name=settings.chroma_collection,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self.collection_name = settings.milvus_collection
         self.embeddings = get_embeddings()
+        self._ensure_collection()
+
+    def _ensure_collection(self):
+        """集合不存在时按当前 embedding 维度创建"""
+        if self.client.has_collection(self.collection_name):
+            return
+        schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True)
+        schema.add_field("id", DataType.VARCHAR, is_primary_key=True, max_length=64)
+        schema.add_field("vector", DataType.FLOAT_VECTOR, dim=settings.embedding_dimensions)
+        index_params = self.client.prepare_index_params()
+        index_params.add_index(
+            field_name="vector",
+            index_type="AUTOINDEX",
+            metric_type="COSINE",
+        )
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            schema=schema,
+            index_params=index_params,
+        )
 
     def add_documents(self, texts: List[str], metadatas: List[dict], ids: List[str]):
         """
@@ -35,41 +49,54 @@ class VectorStore:
             batch_metas = metadatas[i:i + batch_size]
             batch_ids = ids[i:i + batch_size]
             vectors = self.embeddings.embed_documents(batch_texts)
-            self.collection.add(
-                documents=batch_texts,
-                embeddings=vectors,
-                metadatas=batch_metas,
-                ids=batch_ids,
-            )
+            rows = []
+            for j in range(len(batch_texts)):
+                row = {
+                    "id": str(batch_ids[j]),
+                    "vector": vectors[j],
+                    "content": batch_texts[j],
+                }
+                for k, v in batch_metas[j].items():
+                    if k != "content":
+                        row[k] = v
+                rows.append(row)
+            self.client.insert(collection_name=self.collection_name, data=rows)
 
     def search(self, query: str, top_k: int = None) -> List[dict]:
         """
         向量相似度检索
         :param query: 查询文本
         :param top_k: 返回数量
-        :return: 检索结果列表
+        :return: 检索结果列表，元素含 content / metadata / distance
         """
         top_k = top_k or settings.retrieval_top_k
         query_vector = self.embeddings.embed_query(query)
-        results = self.collection.query(
-            query_embeddings=[query_vector],
-            n_results=top_k,
-            include=["documents", "metadatas", "distances"],
+        results = self.client.search(
+            collection_name=self.collection_name,
+            data=[query_vector],
+            limit=top_k,
+            output_fields=["content"],
+            search_params={"metric_type": "COSINE"},
         )
         items = []
-        if results and results["documents"]:
-            for i, doc in enumerate(results["documents"][0]):
+        if results:
+            for hit in results[0]:
+                entity = hit.get("entity", {}) or {}
+                content = entity.pop("content", "")
                 items.append({
-                    "content": doc,
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if results["distances"] else 0,
+                    "content": content,
+                    "metadata": entity,
+                    "distance": hit.get("distance", 0),
                 })
         return items
 
     def delete_by_file_id(self, file_id: int):
         """删除指定文件的所有向量"""
         try:
-            self.collection.delete(where={"file_id": file_id})
+            self.client.delete(
+                collection_name=self.collection_name,
+                filter=f"file_id == {int(file_id)}",
+            )
         except Exception:
             pass
 

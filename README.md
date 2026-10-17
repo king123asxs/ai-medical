@@ -8,7 +8,7 @@
 |------|------|
 | 前端 | Vue3 + Element Plus + Pinia + Vue Router + ECharts + Vite |
 | 后端 | Python 3.11 + FastAPI + SQLAlchemy + Pydantic |
-| 数据库 | MySQL 8（业务数据）+ Neo4j（疾病-症状-药品-科室图谱）+ Chroma（向量库） |
+| 数据库 | MySQL 8（业务数据）+ Neo4j（疾病-症状-药品-科室图谱）+ Milvus（向量库） |
 | AI | 通义千问（OpenAI 兼容接口）+ LangChain RAG + text-embedding-v4 |
 
 ## 项目结构
@@ -89,7 +89,7 @@ NEO4J_PASSWORD=你的密码
 ```bash
 cd server
 python scripts/init_graph.py       # 构建 Neo4j 疾病-症状-药品-科室图谱
-python scripts/init_knowledge.py   # 把 knowledge_base/ 下的文档向量化并写入 Chroma
+python scripts/init_knowledge.py   # 把 knowledge_base/ 下的文档向量化并写入 Milvus
 ```
 
 ### 4. 启动后端
