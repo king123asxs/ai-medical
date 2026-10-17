@@ -32,7 +32,7 @@
 
 - Python 3.11+
 - Node.js 18+（含 npm）
-- MySQL 8（默认端口 3308，可改）
+- MySQL 8（默认端口 3306，可改）
 - Neo4j 5.x（Bolt 端口 7687）
 - 阿里云 DashScope / MaaS 的 API Key（用于通义千问与 Embedding）
 
@@ -47,7 +47,7 @@ CREATE DATABASE db_ai_medical DEFAULT CHARACTER SET utf8mb4;
 导入初始数据：
 
 ```bash
-mysql -u root -P 3308 -p db_ai_medical < database/db_ai_medical.sql
+mysql -u root -P 3306 -p db_ai_medical < database/db_ai_medical.sql
 ```
 
 Neo4j 无需手动建库，后面用脚本初始化。

@@ -1,4 +1,4 @@
-"""通过Python导入SQL脚本"""
+﻿"""通过Python导入SQL脚本"""
 import pymysql
 from pathlib import Path
 
@@ -8,7 +8,7 @@ SQL_FILE = Path(__file__).parent.parent / "sql" / "db_ai_medical.sql"
 def import_sql():
     """执行SQL文件"""
     conn = pymysql.connect(
-        host="127.0.0.1", port=3308, user="root", password="123456", charset="utf8mb4"
+        host="127.0.0.1", port=3306, user="root", password="123456", charset="utf8mb4"
     )
     cursor = conn.cursor()
     sql_content = SQL_FILE.read_text(encoding="utf-8")
